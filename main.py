@@ -1,5 +1,8 @@
 """CLI demo for PawPal+: sorting, filtering, recurring tasks, conflicts, and daily planning."""
 
+import tempfile
+from pathlib import Path
+
 from pawpal_system import Owner, Pet, Scheduler, Task
 
 
@@ -61,6 +64,22 @@ def main() -> None:
         print(f"  • {t.description}: {plan.explain(t)}")
     for t in plan.skipped:
         print(f"  ✗ {t.description}: {plan.explain(t)}")
+
+    section("Next available slot")
+    for minutes in (20, 60):
+        slot = scheduler.next_available_slot(minutes)
+        print(f"Earliest free {minutes}-minute slot today: {slot or 'none left'}")
+
+    section("Save & reload (data.json)")
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "data.json"
+        owner.save_to_json(path)
+        reloaded = Owner.load_from_json(path)
+        print(
+            f"Saved and reloaded {len(reloaded.pets)} pets and "
+            f"{len(reloaded.get_all_tasks())} tasks — identical: "
+            f"{reloaded.get_all_tasks() == owner.get_all_tasks()}"
+        )
 
 
 if __name__ == "__main__":

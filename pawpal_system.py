@@ -1,7 +1,10 @@
 """PawPal+ logic layer: owners, pets, care tasks, and the scheduler."""
 
-from dataclasses import dataclass, field, replace
+import json
+from dataclasses import asdict, dataclass, field, replace
 from datetime import date, timedelta
+from pathlib import Path
+from typing import Any
 
 PRIORITY_RANK = {"high": 0, "medium": 1, "low": 2}
 RECURRENCE = {"daily": timedelta(days=1), "weekly": timedelta(weeks=1)}
@@ -80,6 +83,15 @@ class Task:
             return None
         return replace(self, due_date=self.due_date + step, completed=False)
 
+    def to_dict(self) -> dict[str, Any]:
+        """JSON-friendly dict (the date becomes an ISO string)."""
+        return asdict(self) | {"due_date": self.due_date.isoformat()}
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "Task":
+        """Rebuild a Task from to_dict() output."""
+        return cls(**(data | {"due_date": date.fromisoformat(data["due_date"])}))
+
     def label(self) -> str:
         """Return a short human-readable line for this task."""
         emoji = TASK_EMOJI.get(self.task_type, TASK_EMOJI["other"])
@@ -131,6 +143,41 @@ class Owner:
     def get_all_tasks(self) -> list[Task]:
         """Return every task across all of this owner's pets."""
         return [task for pet in self.pets for task in pet.tasks]
+
+    def to_dict(self) -> dict[str, Any]:
+        """JSON-friendly snapshot of the owner, pets, and tasks."""
+        return {
+            "name": self.name,
+            "available_minutes": self.available_minutes,
+            "pets": [
+                {"name": p.name, "species": p.species, "age": p.age,
+                 "tasks": [t.to_dict() for t in p.tasks]}
+                for p in self.pets
+            ],
+        }
+
+    @classmethod
+    def from_dict(cls, data: dict[str, Any]) -> "Owner":
+        """Rebuild an Owner (with pets and tasks) from to_dict() output."""
+        owner = cls(data["name"], data.get("available_minutes", 120))
+        for p in data.get("pets", []):
+            pet = Pet(p["name"], p["species"], p.get("age", 0))
+            for t in p.get("tasks", []):
+                pet.add_task(Task.from_dict(t))
+            owner.add_pet(pet)
+        return owner
+
+    def save_to_json(self, path: str | Path = "data.json") -> None:
+        """Write everything to a JSON file (written to a temp file first, then swapped in)."""
+        path = Path(path)
+        tmp = path.with_suffix(path.suffix + ".tmp")
+        tmp.write_text(json.dumps(self.to_dict(), indent=2, ensure_ascii=False), encoding="utf-8")
+        tmp.replace(path)
+
+    @classmethod
+    def load_from_json(cls, path: str | Path = "data.json") -> "Owner":
+        """Load an Owner saved with save_to_json(); raises FileNotFoundError if missing."""
+        return cls.from_dict(json.loads(Path(path).read_text(encoding="utf-8")))
 
 
 @dataclass
@@ -230,6 +277,28 @@ class Scheduler:
                     f"'{b.description}' ({b.time}-{to_hhmm(b.end)}), {who}."
                 )
         return warnings
+
+    # ---- free time --------------------------------------------------------------------------
+
+    def next_available_slot(
+        self,
+        duration_minutes: int,
+        day: date | None = None,
+        day_start: str = "07:00",
+        day_end: str = "21:00",
+    ) -> str | None:
+        """Earliest start time that fits `duration_minutes` without overlapping any pending task.
+
+        Walks the day's tasks in time order and returns the first gap that is big enough,
+        or None if the day is full.
+        """
+        cursor, limit = to_minutes(day_start), to_minutes(day_end)
+        busy = self.sort_by_time(self.filter_tasks(self.get_todays_tasks(day), completed=False))
+        for t in busy:
+            if t.start - cursor >= duration_minutes:
+                break
+            cursor = max(cursor, t.end)
+        return to_hhmm(cursor) if cursor + duration_minutes <= limit else None
 
     # ---- planning ---------------------------------------------------------------------------
 

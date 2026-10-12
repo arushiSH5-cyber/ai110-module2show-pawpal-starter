@@ -227,3 +227,45 @@ def test_zero_budget_schedules_nothing():
     mochi.add_task(task("Walk", "07:00"))
     plan = Scheduler(owner).plan_day(DAY)
     assert plan.scheduled == [] and len(plan.skipped) == 1
+
+
+# ---- extensions: next available slot & JSON persistence -------------------------------------
+
+def test_next_available_slot():
+    owner, mochi, luna = make_owner()
+    s = Scheduler(owner)
+    assert s.next_available_slot(30, DAY) == "07:00"  # empty day
+    mochi.add_task(task("Walk", "07:00", 30))
+    luna.add_task(task("Pill", "07:40", 5))
+    assert s.next_available_slot(10, DAY) == "07:30"  # fits the 10-minute gap
+    assert s.next_available_slot(15, DAY) == "07:45"  # gap too small; goes after the pill
+    assert s.next_available_slot(60, DAY, day_end="08:00") is None  # day is full
+
+
+def test_next_slot_ignores_completed_tasks():
+    owner, mochi, _ = make_owner()
+    done = task("Walk", "07:00", 60)
+    done.mark_complete()
+    mochi.add_task(done)
+    assert Scheduler(owner).next_available_slot(30, DAY) == "07:00"
+
+
+def test_json_round_trip(tmp_path):
+    owner, mochi, luna = make_owner(minutes=75)
+    walk = task("Walk", "07:00", 30, "high", "daily")
+    walk.task_type = "walk"
+    walk.mark_complete()
+    mochi.add_task(walk)
+    luna.add_task(task("Pill", "09:00", 5, "high"))
+    path = tmp_path / "data.json"
+    owner.save_to_json(path)
+    loaded = Owner.load_from_json(path)
+    assert loaded.name == "Jordan" and loaded.available_minutes == 75
+    assert [p.name for p in loaded.pets] == ["Mochi", "Luna"]
+    assert loaded.get_all_tasks() == owner.get_all_tasks()  # dataclass equality: every field
+    assert loaded.get_pet("Mochi").tasks[0].due_date == DAY
+
+
+def test_load_missing_file_raises(tmp_path):
+    with pytest.raises(FileNotFoundError):
+        Owner.load_from_json(tmp_path / "nope.json")
