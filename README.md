@@ -84,14 +84,14 @@ Sample test output:
 
 ## 📐 Smarter Scheduling
 
-> Fill in once you've implemented scheduling logic.
-
 | Feature | Method(s) | Notes |
 |---------|-----------|-------|
-| Task sorting | | e.g., by priority, duration |
-| Filtering | | e.g., skip tasks if time runs out |
-| Conflict handling | | e.g., overlapping time slots |
-| Recurring tasks | | e.g., daily vs. weekly |
+| Task sorting | `Scheduler.sort_by_time()`, `Scheduler.sort_by_priority()` | Sorts by minutes after midnight (via `Task.start`), not raw strings, so `"8:15"` comes before `"10:00"`. Priority sort: high → medium → low, then by time. |
+| Filtering | `Scheduler.filter_tasks(tasks, pet_name=..., completed=...)` | Filter by pet (case-insensitive) and/or completion status; `None` means "don't filter on this". |
+| Conflict handling | `Scheduler.detect_conflicts()` | Flags tasks whose **time windows overlap** (start + duration) on the same day, whether for the same pet or for different pets (one owner can't be in two places). Returns warning strings and never raises. Sorting first lets it stop early per task. |
+| Recurring tasks | `Task.next_occurrence()`, `Scheduler.mark_task_complete()` | Completing a `daily` or `weekly` task automatically adds a fresh copy to the same pet, due `today + timedelta(days=1)` or `weeks=1`. One-off tasks just complete. |
+| Daily plan within time budget | `Scheduler.plan_day()` → `DailyPlan` (`build_daily_plan()` returns just the tasks) | Greedy: considers high-priority tasks first and keeps each one that still fits the owner's `available_minutes`. Skipped tasks get a reason (`DailyPlan.explain()`), and the chosen tasks are shown in time order. |
+| Input validation | `Task.__post_init__`, `to_minutes()` | Rejects bad times (`"25:00"`), priorities, frequencies and durations; normalizes `"7:30"` to `"07:30"`. |
 
 ## 📸 Demo Walkthrough
 
