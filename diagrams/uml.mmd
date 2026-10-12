@@ -1,5 +1,5 @@
 classDiagram
-    %% PawPal+ initial design (Phase 1 draft)
+    %% PawPal+ final design — matches pawpal_system.py
 
     class Owner {
         +str name
@@ -8,6 +8,10 @@ classDiagram
         +add_pet(pet) None
         +get_pet(name) Pet
         +get_all_tasks() list~Task~
+        +to_dict() dict
+        +from_dict(data)$ Owner
+        +save_to_json(path) None
+        +load_from_json(path)$ Owner
     }
 
     class Pet {
@@ -25,20 +29,46 @@ classDiagram
         +int duration_minutes
         +str priority
         +str frequency
+        +str task_type
         +date due_date
         +bool completed
+        +str pet_name
+        +int start
+        +int end
         +mark_complete() None
+        +next_occurrence() Task
+        +label() str
+        +to_dict() dict
+        +from_dict(data)$ Task
     }
 
     class Scheduler {
         +Owner owner
-        +get_todays_tasks() list~Task~
-        +sort_by_time(tasks) list~Task~
-        +filter_tasks(pet_name, completed) list~Task~
+        +get_todays_tasks(day) list~Task~
+        +sort_by_time(tasks)$ list~Task~
+        +sort_by_priority(tasks)$ list~Task~
+        +filter_tasks(tasks, pet_name, completed) list~Task~
+        +mark_task_complete(task) Task
         +detect_conflicts(tasks) list~str~
-        +build_daily_plan() list~Task~
+        +next_available_slot(duration, day, day_start, day_end) str
+        +plan_day(day) DailyPlan
+        +build_daily_plan(day) list~Task~
+        +format_schedule(tasks, title) str
+    }
+
+    class DailyPlan {
+        +date day
+        +list~Task~ scheduled
+        +list~Task~ skipped
+        +dict reasons
+        +int minutes_used
+        +int minutes_available
+        +explain(task) str
     }
 
     Owner "1" o-- "*" Pet : has
     Pet "1" *-- "*" Task : owns
-    Scheduler --> Owner : reads tasks via get_all_tasks()
+    Scheduler --> Owner : reads all tasks via get_all_tasks()
+    Scheduler ..> Task : sorts, filters, completes, creates next occurrence
+    Scheduler ..> DailyPlan : plan_day() returns
+    DailyPlan o-- "*" Task : scheduled / skipped
