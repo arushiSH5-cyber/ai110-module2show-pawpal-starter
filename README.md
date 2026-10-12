@@ -69,18 +69,62 @@ Output of `python main.py`:
 ## 🧪 Testing PawPal+
 
 ```bash
-# Run the full test suite:
-pytest
-
-# Run with coverage:
-pytest --cov
+python -m pytest        # add -v to see each test name
 ```
+
+`tests/test_pawpal.py` has 28 tests covering:
+
+- **Core classes**: `mark_complete()`, adding tasks to a pet, `Owner.get_all_tasks()` across pets, duplicate pet names, case-insensitive pet lookup, and input validation (bad times, priorities, frequencies, durations).
+- **Sorting**: chronological order (`"9:00"` before `"10:30"`, which plain string sorting gets wrong), stable order for ties, and priority-then-time.
+- **Filtering**: by pet, by completion status, by both, and an unknown pet.
+- **Recurrence**: a daily task completed on Jan 31 creates a fresh, incomplete copy for Feb 1 (month boundary); weekly adds 7 days; one-off tasks create nothing; the new task is an independent copy.
+- **Conflicts**: exact same time, partial overlap for the same pet, back-to-back tasks that touch but don't overlap, other days and completed tasks ignored, and three tasks at once giving three warnings.
+- **Daily plan**: high priority wins within the time budget, skipped tasks are explained, completed and future tasks are excluded, and a zero budget schedules nothing.
+- **Edge cases**: an owner with no pets and a pet with no tasks.
+
+To check the tests themselves, I temporarily broke the code three ways (string-based time sort, back-to-back counted as a conflict, a recurring copy left marked complete). Each change made the matching test fail.
 
 Sample test output:
 
 ```
-# Paste your pytest output here
+============================= test session starts ==============================
+configfile: pytest.ini
+testpaths: tests
+collecting ... collected 28 items
+
+tests/test_pawpal.py::test_mark_complete_changes_status PASSED           [  3%]
+tests/test_pawpal.py::test_adding_task_increases_pet_task_count PASSED   [  7%]
+tests/test_pawpal.py::test_owner_collects_tasks_from_all_pets PASSED     [ 10%]
+tests/test_pawpal.py::test_duplicate_pet_names_rejected_and_lookup_is_case_insensitive PASSED [ 14%]
+tests/test_pawpal.py::test_empty_cases PASSED                            [ 17%]
+tests/test_pawpal.py::test_invalid_task_fields_rejected[kwargs0] PASSED  [ 21%]
+tests/test_pawpal.py::test_invalid_task_fields_rejected[kwargs1] PASSED  [ 25%]
+tests/test_pawpal.py::test_invalid_task_fields_rejected[kwargs2] PASSED  [ 28%]
+tests/test_pawpal.py::test_invalid_task_fields_rejected[kwargs3] PASSED  [ 32%]
+tests/test_pawpal.py::test_invalid_task_fields_rejected[kwargs4] PASSED  [ 35%]
+tests/test_pawpal.py::test_invalid_task_fields_rejected[kwargs5] PASSED  [ 39%]
+tests/test_pawpal.py::test_time_is_normalized PASSED                     [ 42%]
+tests/test_pawpal.py::test_sort_by_time_is_chronological_not_alphabetical PASSED [ 46%]
+tests/test_pawpal.py::test_sort_by_time_keeps_insertion_order_for_ties PASSED [ 50%]
+tests/test_pawpal.py::test_sort_by_priority_then_time PASSED             [ 53%]
+tests/test_pawpal.py::test_filter_by_pet_and_status PASSED               [ 57%]
+tests/test_pawpal.py::test_completing_daily_task_creates_next_day_task PASSED [ 60%]
+tests/test_pawpal.py::test_completing_weekly_task_creates_task_seven_days_later PASSED [ 64%]
+tests/test_pawpal.py::test_completing_one_off_task_creates_nothing PASSED [ 67%]
+tests/test_pawpal.py::test_next_occurrence_is_independent_copy PASSED    [ 71%]
+tests/test_pawpal.py::test_exact_same_time_is_flagged PASSED             [ 75%]
+tests/test_pawpal.py::test_partial_overlap_same_pet_is_flagged PASSED    [ 78%]
+tests/test_pawpal.py::test_back_to_back_tasks_do_not_conflict PASSED     [ 82%]
+tests/test_pawpal.py::test_conflicts_ignore_other_days_and_completed_tasks PASSED [ 85%]
+tests/test_pawpal.py::test_three_overlapping_tasks_give_three_warnings PASSED [ 89%]
+tests/test_pawpal.py::test_plan_prefers_high_priority_within_time_budget PASSED [ 92%]
+tests/test_pawpal.py::test_plan_skips_completed_and_other_days PASSED    [ 96%]
+tests/test_pawpal.py::test_zero_budget_schedules_nothing PASSED          [100%]
+
+============================== 28 passed in 0.03s ==============================
 ```
+
+**Confidence level: ★★★★☆ (4/5).** Every scheduling rule above is tested, including the edge cases where it's easiest to slip up. It isn't 5/5 because the Streamlit UI is only checked by hand and with Streamlit's `AppTest`, not in the suite. The greedy planner can also leave unused minutes that a different combination of tasks would have filled.
 
 ## 📐 Smarter Scheduling
 
